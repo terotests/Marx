@@ -362,13 +362,14 @@
         // if there are no workers available, emulate calls locally
         if (!this._workersAvailable()) {
           // files to load for the JS files to execute...
-          var requires = classDef.requires;
+          var requires = classDef.requires,
+              promises = [];
           for (var fileType in requires) {
             if (fileType == "js") {
               var list = requires[fileType];
               list.forEach(function (file) {
                 //  append the JS files to the head...
-                me._appendToHead("js", file.url);
+                promises.push(me._appendToHead("js", file.url));
               });
             }
           }
@@ -442,26 +443,43 @@
         // create a worker object class
         var class_id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        this._createWorkerClass(class_id, classDef.webWorkers, classDef.requires);
-
         var me = this,
             p = this.__promiseClass();
-        var c = function c(id) {
 
-          if (!id) {
-            id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-          }
-          this._id = id;
-          var obj = this;
+        if (this._workersAvailable()) {
+          // the create class promise, if workers are available
+          var cProm = this._createWorkerClass(class_id, classDef.webWorkers, classDef.requires);
+          var c = function c(id) {
 
-          return new p(function (resolve) {
-            me._createWorkerObj(class_id, id, obj).then(function () {
-              obj.trigger("ready");
-              resolve(obj);
+            if (!id) {
+              id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            }
+            this._id = id;
+            var obj = this;
+
+            return new p(function (resolve) {
+              cProm.then(function () {
+                me._createWorkerObj(class_id, id, obj).then(function () {
+                  obj.trigger("ready");
+                  resolve(obj);
+                });
+              });
             });
-          });
-        };
-        c.prototype = oProto;
+          };
+          c.prototype = oProto;
+        } else {
+
+          var c = function c(id) {
+            if (!id) {
+              id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            }
+            this._id = id;
+            var obj = this;
+
+            return p.resolve(this);
+          };
+          c.prototype = oProto;
+        }
 
         return c;
       };
