@@ -134,6 +134,22 @@
                   var o_instance = Object.create(newClass);
                   this._instances[dataObj.id] = o_instance;
 
+                  if (dataObj.localMethods) {
+                    var methods = dataObj.localMethods;
+                    for (var n in methods) {
+                      if (methods.hasOwnProperty(n)) {
+                        (function (n) {
+                          o_instance[n] = function (data) {
+                            postMessage({
+                              msg: n,
+                              data: data,
+                              ref_id: dataObj.id
+                            });
+                          };
+                        })(n);
+                      }
+                    }
+                  }
                   o_instance.sendMsg = function (msg, data, cb) {
                     postMessage({
                       msg: msg,
@@ -238,7 +254,16 @@
                 var oo = _objRefs[oEvent.data.ref_id];
 
                 if (oo) {
-                  var dd = oEvent.data.data;
+                  var dd = oEvent.data.data,
+                      msg = oEvent.data.msg;
+
+                  if (oo[msg]) {
+                    var cDef = _classDefs[oo.__wClass];
+                    if (cDef && cDef.methods[msg]) {
+                      oo[msg](oEvent.data.data);
+                      return;
+                    }
+                  }
 
                   // trigger message if directed abstract msg to some object
                   if (oo.trigger) {
@@ -265,8 +290,9 @@
        * @param float className
        * @param float classObj
        * @param float requires
+       * @param float localMethods
        */
-      _myTrait_._createWorkerClass = function (className, classObj, requires) {
+      _myTrait_._createWorkerClass = function (className, classObj, requires, localMethods) {
         var p = this.__promiseClass(),
             me = this;
 
@@ -282,7 +308,8 @@
                   me._callWorker(_threadPool[i], "/", "createClass", {
                     className: className,
                     code: codeStr,
-                    requires: requires
+                    requires: requires,
+                    localMethods: localMethods
                   }, done);
                 });
               } else {
@@ -291,7 +318,8 @@
                     me._callWorker(_threadPool[i], "/", "createClass", {
                       className: className,
                       code: codeStr,
-                      requires: requires
+                      requires: requires,
+                      localMethods: localMethods
                     }, done);
                   });
                 });
@@ -357,7 +385,8 @@
        */
       _myTrait_.createClass = function (classDef) {
         var oProto = {},
-            me = this;
+            me = this,
+            localMethods = {};
 
         // if there are no workers available, emulate calls locally
         if (!this._workersAvailable()) {
@@ -387,6 +416,7 @@
           var cDef = classDef.methods;
           for (var n in cDef) {
             if (cDef.hasOwnProperty(n)) {
+              localMethods[n] = n;
               (function (fn) {
                 oProto[n] = function (data, cb) {
                   fn.apply(this, [data, cb]);
@@ -412,6 +442,7 @@
           var cDef = classDef.methods;
           for (var n in cDef) {
             if (cDef.hasOwnProperty(n)) {
+              localMethods[n] = n;
               (function (fn, n) {
                 oProto[n] = function () {
                   var len = arguments.length,
@@ -448,7 +479,7 @@
 
         if (this._workersAvailable()) {
           // the create class promise, if workers are available
-          var cProm = this._createWorkerClass(class_id, classDef.webWorkers, classDef.requires);
+          var cProm = this._createWorkerClass(class_id, classDef.webWorkers, classDef.requires, localMethods);
           var c = function c(id) {
 
             if (!id) {
