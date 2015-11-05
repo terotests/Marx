@@ -114,7 +114,6 @@
       _myTrait_._callObject = function (id, fnName, data, callback) {
         var o = _objRefs[id];
         if (o) {
-          alert("_callWorker");
           this._callWorker(_threadPool[o.__wPool], id, fnName, data, callback);
         }
         return this;
@@ -296,7 +295,6 @@
           if (classDef.hasOwnProperty(n)) {
             oProto[n] = function (data, cb) {
               if (!data) data = null;
-              alert("About the call " + n + " " + this._id);
               me._callObject(this._id, n, data, cb);
             };
           }
@@ -323,7 +321,7 @@
 
         var me = this;
         var c = function c(id) {
-          alert("Worker class created");
+
           if (!id) {
             id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
           }
