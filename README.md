@@ -1,6 +1,22 @@
 # Marx - the worker class
 
+Using the Marx is as follows:
 
+```javascript
+var marx = Marx();
+var myClass = marx.createClass({
+    hello : function(data, cb) {
+        cb("hello "+data);
+    }
+})
+
+var obj = new myClass();
+obj.on("ready", function() {
+    obj.hello("there", function(response) {
+        console.log(response);
+    })    
+})
+```
 
 
 
@@ -86,6 +102,8 @@ The class has following internal singleton variables:
 ```javascript
 
 if(useClass) _promiseClass = useClass;
+
+if(!_promiseClass) _promiseClass = Promise;
 
 return _promiseClass;
 ```
@@ -384,7 +402,7 @@ for(var n in classDef) {
     if(classDef.hasOwnProperty(n)) {
         oProto[n] = function(data, cb) {
             if(!data) data = null;
-             me._callObject( this._id, n, data, cb );
+            me._callObject( this._id, n, data, cb );
         }
     }
 }
@@ -410,13 +428,17 @@ var class_id =  Math.random().toString(36).substring(2, 15) +
 this._createWorkerClass( class_id, classDef );
 
 var me = this;
-var c = function workerClass(id) {
+var c = function(id) {
+
     if(!id) {
         id =  Math.random().toString(36).substring(2, 15) +
               Math.random().toString(36).substring(2, 15);        
     }
     this._id = id;
-    me._createWorkerObj( class_id, id, this );
+    var obj = this;
+    me._createWorkerObj( class_id, id, this ).then(function() {
+        obj.trigger("ready");
+    })
 };
 c.prototype = oProto;
 
