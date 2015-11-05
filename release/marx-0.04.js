@@ -417,7 +417,7 @@
           // the worker functions will be acting locally
           var workers = classDef.webWorkers;
           for (var n in workers) {
-            if (classDef.hasOwnProperty(n)) {
+            if (workers.hasOwnProperty(n)) {
               (function (fn, n) {
                 oProto[n] = function (data, cb) {
                   fn.apply(this, [data, cb]);
