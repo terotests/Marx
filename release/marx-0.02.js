@@ -97,6 +97,7 @@
             this._initDone = true;
             this._classes = {};
             this._instances = {};
+            this._imports = {};
           },
           start: function start(msg) {
             this.init();
@@ -107,6 +108,20 @@
                 var dataObj = JSON.parse(msg.data.data);
                 eval("newClass = " + dataObj.code);
                 this._classes[dataObj.className] = newClass;
+
+                try {
+                  // -- import the scripts
+                  if (dataObj.requires && dataObj.requires.js) {
+                    var list = dataObj.requires.js;
+                    for (var i = 0; i < list.length; i++) {
+                      var url = list[i].url;
+                      if (this._imports[url]) continue;
+                      importScripts(url);
+                      this._imports[url] = true;
+                    }
+                  }
+                } catch (e) {}
+
                 postMessage({
                   cbid: msg.data.cbid,
                   data: "Done"
@@ -249,8 +264,9 @@
       /**
        * @param float className
        * @param float classObj
+       * @param float requires
        */
-      _myTrait_._createWorkerClass = function (className, classObj) {
+      _myTrait_._createWorkerClass = function (className, classObj, requires) {
         var p = this.__promiseClass(),
             me = this;
 
@@ -265,7 +281,8 @@
                 first = prom = new p(function (done) {
                   me._callWorker(_threadPool[i], "/", "createClass", {
                     className: className,
-                    code: codeStr
+                    code: codeStr,
+                    requires: requires
                   }, done);
                 });
               } else {
@@ -273,7 +290,8 @@
                   return new p(function (done) {
                     me._callWorker(_threadPool[i], "/", "createClass", {
                       className: className,
-                      code: codeStr
+                      code: codeStr,
+                      requires: requires
                     }, done);
                   });
                 });
@@ -424,7 +442,7 @@
         // create a worker object class
         var class_id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        this._createWorkerClass(class_id, classDef.webWorkers);
+        this._createWorkerClass(class_id, classDef.webWorkers, classDef.requires);
 
         var me = this,
             p = this.__promiseClass();
