@@ -397,6 +397,9 @@
 
         // if there are no workers available, emulate calls locally
         if (!this._workersAvailable()) {
+
+          console.log("** workers are not available **");
+
           // files to load for the JS files to execute...
           var requires = classDef.requires,
               promises = [];
