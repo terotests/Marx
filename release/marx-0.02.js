@@ -117,7 +117,7 @@
                           postMessage({
                             msg: n,
                             data: data,
-                            ref_id: dataObj.id
+                            ref_id: this._ref_id
                           });
                         };
                       })(n);
