@@ -381,24 +381,26 @@
           var workers = classDef.webWorkers;
           for (var n in workers) {
             if (workers.hasOwnProperty(n)) {
-              oProto[n] = function (data, cb) {
-                if (!data) data = null;
-                me._callObject(this._id, n, data, cb);
-              };
+              (function (n) {
+                oProto[n] = function (data, cb) {
+                  if (!data) data = null;
+                  me._callObject(this._id, n, data, cb);
+                };
+              })(n);
             }
           }
 
           var cDef = classDef.methods;
           for (var n in cDef) {
             if (cDef.hasOwnProperty(n)) {
-              (function (fn) {
+              (function (fn, n) {
                 oProto[n] = function () {
                   var len = arguments.length,
                       args = new Array(len);
                   for (var i = 0; i < len; i++) args[i] = arguments[i];
                   fn.apply(this, args);
                 };
-              })(cDef[n]);
+              })(cDef[n], n);
             }
           }
         }
