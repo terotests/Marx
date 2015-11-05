@@ -114,9 +114,13 @@
                     if (methods.hasOwnProperty(n)) {
                       (function (n) {
                         newClass[n] = function (data) {
+
+                          var len = arguments.length,
+                              args = new Array(len);
+                          for (var i = 0; i < len; i++) args[i] = arguments[i];
                           postMessage({
                             msg: n,
-                            data: data,
+                            data: args,
                             ref_id: this._ref_id
                           });
                         };
@@ -261,7 +265,7 @@
                   if (oo[msg]) {
                     var cDef = _classDefs[oo.__wClass];
                     if (cDef && cDef.methods[msg]) {
-                      oo[msg](oEvent.data.data);
+                      oo[msg].apply(oo, oEvent.data.data);
                       return;
                     }
                   }
