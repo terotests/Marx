@@ -358,11 +358,11 @@
           var workers = classDef.webWorkers;
           for (var n in workers) {
             if (classDef.hasOwnProperty(n)) {
-              (function (fn) {
+              (function (fn, n) {
                 oProto[n] = function (data, cb) {
                   fn.apply(this, [data, cb]);
                 };
-              })(workers[n]);
+              })(workers[n], n);
             }
           }
           var cDef = classDef.methods;
@@ -372,7 +372,7 @@
                 oProto[n] = function (data, cb) {
                   fn.apply(this, [data, cb]);
                 };
-              })(cDef[n]);
+              })(cDef[n], n);
             }
           }
         } else {
