@@ -295,6 +295,7 @@
           if (classDef.hasOwnProperty(n)) {
             oProto[n] = function (data, cb) {
               if (!data) data = null;
+              alert("About the call " + n);
               me._callObject(this._id, n, data, cb);
             };
           }
