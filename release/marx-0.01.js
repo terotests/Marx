@@ -320,7 +320,8 @@
         this._createWorkerClass(class_id, classDef);
 
         var me = this;
-        var c = function workerClass(id) {
+        var c = function c(id) {
+          alert("Worker class created");
           if (!id) {
             id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
           }
