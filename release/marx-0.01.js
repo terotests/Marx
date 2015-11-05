@@ -328,7 +328,10 @@
             id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
           }
           this._id = id;
-          me._createWorkerObj(class_id, id, this);
+          var me = this;
+          me._createWorkerObj(class_id, id, this).then(function () {
+            me.trigger("ready");
+          });
         };
         c.prototype = oProto;
 
