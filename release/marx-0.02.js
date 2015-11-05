@@ -355,7 +355,7 @@
             }
           }
           // the worker functions will be acting locally
-          var workers = classDef.workers;
+          var workers = classDef.webWorkers;
           for (var n in workers) {
             if (classDef.hasOwnProperty(n)) {
               (function (fn) {
@@ -365,27 +365,41 @@
               })(workers[n]);
             }
           }
-          var cDef = classDef;
+          var cDef = classDef.methods;
           for (var n in cDef) {
-            // TODO : continue the class def from here...
-            if (classDef.hasOwnProperty(n)) {
+            if (cDef.hasOwnProperty(n)) {
               (function (fn) {
                 oProto[n] = function (data, cb) {
                   fn.apply(this, [data, cb]);
                 };
-              })(workers[n]);
+              })(cDef[n]);
             }
           }
-        }
+        } else {
 
-        // just accept the workers only...
-        var workers = classDef.workers;
-        for (var n in workers) {
-          if (classDef.hasOwnProperty(n)) {
-            oProto[n] = function (data, cb) {
-              if (!data) data = null;
-              me._callObject(this._id, n, data, cb);
-            };
+          // just accept the workers only...
+          var workers = classDef.webWorkers;
+          for (var n in workers) {
+            if (workers.hasOwnProperty(n)) {
+              oProto[n] = function (data, cb) {
+                if (!data) data = null;
+                me._callObject(this._id, n, data, cb);
+              };
+            }
+          }
+
+          var cDef = classDef.methods;
+          for (var n in cDef) {
+            if (cDef.hasOwnProperty(n)) {
+              (function (fn) {
+                oProto[n] = function () {
+                  var len = arguments.length,
+                      args = new Array(len);
+                  for (var i = 0; i < len; i++) args[i] = arguments[i];
+                  fn.apply(this, args);
+                };
+              })(cDef[n]);
+            }
           }
         }
 
@@ -408,7 +422,7 @@
         // create a worker object class
         var class_id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        this._createWorkerClass(class_id, classDef);
+        this._createWorkerClass(class_id, classDef.webWorkers);
 
         var me = this,
             p = this.__promiseClass();
