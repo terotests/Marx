@@ -7,14 +7,25 @@ var marx = Marx();
 var myClass = marx.createClass({
     hello : function(data, cb) {
         cb("hello "+data);
+        
+        // or trigger message
+        var me = this;
+        setTimeout( function() {
+            me.trigger("secondmsg", "me again")
+        },2000);        
     }
 })
 
 var obj = new myClass();
 obj.on("ready", function() {
+    // callback
     obj.hello("there", function(response) {
         console.log(response);
     })    
+    // listen to messages
+    obj.on("secondmsg", function(response) {
+        console.log(response);
+    })      
 })
 ```
 
