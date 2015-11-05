@@ -107,6 +107,23 @@
                 var newClass;
                 var dataObj = JSON.parse(msg.data.data);
                 eval("newClass = " + dataObj.code);
+
+                if (dataObj.localMethods) {
+                  var methods = dataObj.localMethods;
+                  for (var n in methods) {
+                    if (methods.hasOwnProperty(n)) {
+                      (function (n) {
+                        newClass[n] = function (data) {
+                          postMessage({
+                            msg: n,
+                            data: data,
+                            ref_id: dataObj.id
+                          });
+                        };
+                      })(n);
+                    }
+                  }
+                }
                 this._classes[dataObj.className] = newClass;
 
                 try {
@@ -134,22 +151,6 @@
                   var o_instance = Object.create(newClass);
                   this._instances[dataObj.id] = o_instance;
 
-                  if (dataObj.localMethods) {
-                    var methods = dataObj.localMethods;
-                    for (var n in methods) {
-                      if (methods.hasOwnProperty(n)) {
-                        (function (n) {
-                          o_instance[n] = function (data) {
-                            postMessage({
-                              msg: n,
-                              data: data,
-                              ref_id: dataObj.id
-                            });
-                          };
-                        })(n);
-                      }
-                    }
-                  }
                   o_instance.sendMsg = function (msg, data, cb) {
                     postMessage({
                       msg: msg,
