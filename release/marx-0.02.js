@@ -257,7 +257,7 @@
                 if (oo) {
                   var dd = oEvent.data.data,
                       msg = oEvent.data.msg;
-
+                  console.log(oEvent.data);
                   if (oo[msg]) {
                     var cDef = _classDefs[oo.__wClass];
                     if (cDef && cDef.methods[msg]) {
@@ -443,8 +443,9 @@
           var cDef = classDef.methods;
           for (var n in cDef) {
             if (cDef.hasOwnProperty(n)) {
-              localMethods[n] = n;
+
               (function (fn, n) {
+                localMethods[n] = n;
                 oProto[n] = function () {
                   var len = arguments.length,
                       args = new Array(len);
