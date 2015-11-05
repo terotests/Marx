@@ -300,7 +300,9 @@
         if (!_classDefs) _classDefs = {};
         return new p(function (success) {
           var prom, first;
-          _classDefs[className] = classObj;
+          _classDefs[className] = {
+            methods: localMethods
+          };
           var codeStr = me._serializeClass(classObj);
           for (var i = 0; i < _maxWorkerCnt; i++) {
             (function (i) {
