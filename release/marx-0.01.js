@@ -31,6 +31,8 @@
 
         if (useClass) _promiseClass = useClass;
 
+        if (!_promiseClass) _promiseClass = Promise;
+
         return _promiseClass;
       };
 
