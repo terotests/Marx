@@ -5,6 +5,27 @@ Using the Marx is as follows:
 ```javascript
 var marx = Marx();
 var myClass = marx.createClass({
+    webWorkers : {
+        // web worker function
+        hello : function(data, cb) {
+            cb("Hello "+data);
+        }
+    }
+})
+(new myClass()).then( function(obj) {
+    // call function inside the web worker
+    obj.hello("Hello Web Worker!", function(result) {
+        // do something with result
+        console.log(result);
+    });;
+});
+````
+
+A bit more complex example with support for local functions
+
+```javascript
+var marx = Marx();
+var myClass = marx.createClass({
     requires : {
         js : [
             {
@@ -138,7 +159,9 @@ The class has following internal singleton variables:
 
 if(useClass) _promiseClass = useClass;
 
-if(!_promiseClass) _promiseClass = Promise;
+if(typeof(Promise) != "undefined") {
+    if(!_promiseClass) _promiseClass = Promise;
+}
 
 return _promiseClass;
 ```
@@ -538,27 +561,31 @@ Creates the class to be used as worker. Functions `on` and `trigger` are reserve
 ```javascript
 var oProto = {},
     me = this,
-    localMethods = {};
+    localMethods = {},
+    localPromises = [];
     
 
 // if there are no workers available, emulate calls locally
 if(!this._workersAvailable()) {
+    
+    console.log("** workers are not available **");
+    
      // files to load for the JS files to execute...
-    var requires = classDef.requires,
-        promises = [];
+    var requires = classDef.requires;
+        
     for(var fileType in requires) {
         if(fileType=="js") {
             var list = requires[fileType];
             list.forEach( function(file) {
                 //  append the JS files to the head...
-                promises.push( me._appendToHead( "js", file.url ) );
+                localPromises.push( me._appendToHead( "js", file.url ) );
             });
         }
     }
     // the worker functions will be acting locally
     var workers = classDef.webWorkers;
     for(var n in workers) {
-        if(classDef.hasOwnProperty(n)) {
+        if(workers.hasOwnProperty(n)) {
             (function(fn,n) {
                 oProto[n] = function(data, cb) {
                     fn.apply(this, [data, cb]);
@@ -670,7 +697,23 @@ if(this._workersAvailable()) {
         this._id = id;
         var obj = this;
         
-        return p.resolve(this);
+        return new p(function(resolve) {
+            if(localPromises.length==0) {
+                resolve(obj);
+                return;
+            }
+            var start = localPromises.pop();
+            var next;
+            while(next = localPromises.pop()) {
+                start = start.then( function() {
+                    return next;
+                })
+            }
+            start.then( function() {
+                resolve(obj);
+            })
+
+        })
     };
     c.prototype = oProto;    
 }
