@@ -29,6 +29,9 @@ obj.on("ready", function() {
 })
 ```
 
+Codepen:
+http://codepen.io/teroktolonen/pen/wKErBX?editors=001
+
 
 
 
@@ -54,6 +57,7 @@ obj.on("ready", function() {
 
 
 - [__promiseClass](README.md#Marx___promiseClass)
+- [_appendToHead](README.md#Marx__appendToHead)
 - [_baseWorker](README.md#Marx__baseWorker)
 - [_callObject](README.md#Marx__callObject)
 - [_callWorker](README.md#Marx__callWorker)
@@ -103,6 +107,8 @@ The class has following internal singleton variables:
         
 * _classDefs
         
+* _loadedLibs
+        
         
 ### <a name="Marx___promiseClass"></a>Marx::__promiseClass(useClass)
 `useClass` The Promise implementation to use
@@ -119,6 +125,59 @@ if(!_promiseClass) _promiseClass = Promise;
 return _promiseClass;
 ```
 
+### <a name="Marx__appendToHead"></a>Marx::_appendToHead(elemType, url)
+
+
+*The source code for the function*:
+```javascript
+
+if(!url) {
+    url = elemType;
+    var parts = url.split(".");
+    elemType = parts.pop(); // for example file.css -> css
+}
+var p = this.__promiseClass();
+if(p) {
+    if(!_loadedLibs) {
+        _loadedLibs = {};
+    }
+    // if loading, return the promise
+    if(_loadedLibs[url]) {
+        return _loadedLibs[url];
+    }
+    _loadedLibs[url] = new p(
+        function(accept, fail) {
+
+            var ext;
+            if(elemType == "js") {
+                ext = document.createElement("script");
+                ext.src = url;
+            }
+            if(elemType == "css") {
+                ext = document.createElement("link");
+                ext.setAttribute("rel", "stylesheet");
+                ext.setAttribute("type", "text/css");
+                ext.setAttribute("href", url);        
+                 
+            }
+            if(!ext) {
+                fail("Unknown element type "+url);
+                return;
+            }
+            ext.onload = function () {
+                accept(url);
+            }
+            ext.onerror = function() {
+                fail(url);
+            }     
+            document.head.appendChild(ext);
+
+        });
+    return _loadedLibs[url];
+}
+
+```
+
 ### <a name="Marx__baseWorker"></a>Marx::_baseWorker(t)
 
 The bootstrap for the worker to receive and delegate commands. This is the code running at the worker -side of the pool.
@@ -130,6 +189,7 @@ return {
     this._initDone = true;
     this._classes = {};
     this._instances = {};
+    this._imports = {};
   },
   start: function(msg) {
     this.init();
@@ -140,6 +200,22 @@ return {
         var dataObj = JSON.parse( msg.data.data );
         eval("newClass = " + dataObj.code);
         this._classes[dataObj.className] = newClass;
+        
+        try {
+            // -- import the scripts
+            if(dataObj.requires && dataObj.requires.js) {
+                var list = dataObj.requires.js;
+                for(var i=0; i<list.length;i++) {
+                    var url = list[i].url;
+                    if(this._imports[url]) continue;
+                    importScripts(url);
+                    this._imports[url] = true;
+                }
+            }
+        } catch(e) {
+            
+        }
+        
         postMessage({
           cbid: msg.data.cbid,
           data : "Done"
@@ -300,7 +376,7 @@ try {
 }
 ```
 
-### <a name="Marx__createWorkerClass"></a>Marx::_createWorkerClass(className, classObj)
+### <a name="Marx__createWorkerClass"></a>Marx::_createWorkerClass(className, classObj, requires)
 
 
 *The source code for the function*:
@@ -319,7 +395,8 @@ return new p(
                 first = prom = new p(function(done) {
                     me._callWorker(_threadPool[i], "/", "createClass",  {
                         className: className,
-                        code: codeStr
+                        code: codeStr,
+                        requires : requires
                     }, done );
                 });
             } else {
@@ -327,7 +404,8 @@ return new p(
                     return new p(function(done) {
                         me._callWorker(_threadPool[i], "/", "createClass",  {
                             className: className,
-                            code: codeStr
+                            code: codeStr,
+                            requires : requires
                         }, done );
                     })
                 })
@@ -408,15 +486,76 @@ Creates the class to be used as worker. Functions `on` and `trigger` are reserve
 ```javascript
 var oProto = {},
     me = this;
+    
 
-for(var n in classDef) {
-    if(classDef.hasOwnProperty(n)) {
-        oProto[n] = function(data, cb) {
-            if(!data) data = null;
-            me._callObject( this._id, n, data, cb );
+// if there are no workers available, emulate calls locally
+if(!this._workersAvailable()) {
+     // files to load for the JS files to execute...
+    var requires = classDef.requires,
+        promises = [];
+    for(var fileType in requires) {
+        if(fileType=="js") {
+            var list = requires[fileType];
+            list.forEach( function(file) {
+                //  append the JS files to the head...
+                promises.push( me._appendToHead( "js", file.url ) );
+            });
         }
     }
+    // the worker functions will be acting locally
+    var workers = classDef.webWorkers;
+    for(var n in workers) {
+        if(classDef.hasOwnProperty(n)) {
+            (function(fn,n) {
+                oProto[n] = function(data, cb) {
+                    fn.apply(this, [data, cb]);
+                }
+            })(workers[n],n);
+        }
+    }    
+    var cDef = classDef.methods;
+    for(var n in cDef) {
+        if(cDef.hasOwnProperty(n)) {
+            (function(fn) {
+                oProto[n] = function(data, cb) {
+                    fn.apply(this, [data, cb]);
+                }
+            })(cDef[n],n);
+        }
+    }    
+    
+    
+} else {   
+
+    // just accept the workers only...
+    var workers = classDef.webWorkers;
+    for(var n in workers) {
+        if(workers.hasOwnProperty(n)) {
+            (function(n) {
+                oProto[n] = function(data, cb) {
+                    if(!data) data = null;
+                    me._callObject( this._id, n, data, cb );
+                }
+            })(n);
+        }
+    }
+
+    var cDef = classDef.methods;
+    for(var n in cDef) {
+        if(cDef.hasOwnProperty(n)) {
+            (function(fn,n) {
+                oProto[n] = function() {
+                    var len = arguments.length,
+                        args = new Array(len);
+                    for(var i=0; i<len; i++) args[i] = arguments[i];
+                    fn.apply(this, args);
+                }
+            })(cDef[n],n);
+        }
+    }    
 }
+
+var imports = [];
 
 oProto.on = function(msg, fn) {
     if(!this.__evt) this.__evt = {};
@@ -436,22 +575,49 @@ oProto.trigger = function(msg, data) {
 var class_id =  Math.random().toString(36).substring(2, 15) +
                 Math.random().toString(36).substring(2, 15);  
                 
-this._createWorkerClass( class_id, classDef );
 
-var me = this;
-var c = function(id) {
 
-    if(!id) {
-        id =  Math.random().toString(36).substring(2, 15) +
-              Math.random().toString(36).substring(2, 15);        
-    }
-    this._id = id;
-    var obj = this;
-    me._createWorkerObj( class_id, id, this ).then(function() {
-        obj.trigger("ready");
-    })
-};
-c.prototype = oProto;
+var me = this,
+    p = this.__promiseClass();
+
+if(this._workersAvailable()) {
+    // the create class promise, if workers are available
+    var cProm = this._createWorkerClass( class_id, classDef.webWorkers, classDef.requires );
+    var c = function(id) {
+    
+        if(!id) {
+            id =  Math.random().toString(36).substring(2, 15) +
+                  Math.random().toString(36).substring(2, 15);        
+        }
+        this._id = id;
+        var obj = this;
+        
+        return new p(
+            function(resolve) {
+                cProm.then( 
+                    function() {
+                        me._createWorkerObj( class_id, id, obj ).then(function() {
+                            obj.trigger("ready");
+                            resolve(obj);
+                        })
+                    });
+            });
+    };
+    c.prototype = oProto;
+} else {
+    
+    var c = function(id) {
+        if(!id) {
+            id =  Math.random().toString(36).substring(2, 15) +
+                  Math.random().toString(36).substring(2, 15);        
+        }
+        this._id = id;
+        var obj = this;
+        
+        return p.resolve(this);
+    };
+    c.prototype = oProto;    
+}
 
 return c;
 
