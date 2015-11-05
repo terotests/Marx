@@ -5,32 +5,50 @@ Using the Marx is as follows:
 ```javascript
 var marx = Marx();
 var myClass = marx.createClass({
-    hello : function(data, cb) {
-        cb("hello "+data);
-        
-        // or trigger message
-        var me = this;
-        setTimeout( function() {
-            me.trigger("secondmsg", "me again")
-        },2000);        
+    requires : {
+        js : [
+            {
+                url : "https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.min.js"
+            }
+        ]  
+    },
+    webWorkers : {
+        // web worker function
+        hello : function(data, cb) {
+            if(typeof(_) != "undefined") {
+                data+=" we had lodash";
+            }
+            cb("hello "+data);
+        }
+    },
+    // defines the methods of the UI thread or local functions
+    methods : {
+        localFn : function(data) {
+            // the web worker can also call this with
+            // this.localFn( data );
+        }   
     }
 })
 
-var obj = new myClass();
-obj.on("ready", function() {
-    // callback
-    obj.hello("there", function(response) {
-        console.log(response);
-    })    
-    // listen to messages
-    obj.on("secondmsg", function(response) {
-        console.log(response);
-    })      
-})
+(new myClass()).then( function(obj) {
+    // call function inside the web worker
+    obj.hello("Hello Web Worker!", function(result) {
+        // do something with result
+        console.log(result);
+    });;
+});
 ```
 
+Listening to the events from web worker
+
+```javascript
+    obj.on("message", function(data) {
+    ));
+```
+
+
 Codepen:
-http://codepen.io/teroktolonen/pen/wKErBX?editors=001
+http://codepen.io/teroktolonen/pen/ojPGww?editors=001
 
 
 
@@ -199,6 +217,27 @@ return {
         var newClass;
         var dataObj = JSON.parse( msg.data.data );
         eval("newClass = " + dataObj.code);
+        
+          if(dataObj.localMethods) {
+              var methods = dataObj.localMethods;
+              for(var n in methods) {
+                  if(methods.hasOwnProperty(n)) {
+                      (function(n) {
+                          newClass[n] = function(data) {
+
+                              var len = arguments.length,
+                                  args = new Array(len);
+                              for(var i=0; i<len; i++) args[i] = arguments[i];
+                              postMessage({
+                                msg : n,
+                                data : args,
+                                ref_id : this._ref_id
+                              });                           
+                          }
+                      })(n);
+                  }
+              }
+          }        
         this._classes[dataObj.className] = newClass;
         
         try {
@@ -353,7 +392,16 @@ try {
               var oo = _objRefs[oEvent.data.ref_id];
               
               if(oo) {
-                  var dd = oEvent.data.data;
+                  var dd = oEvent.data.data,
+                      msg = oEvent.data.msg;
+                  console.log(oEvent.data);
+                  if(oo[msg]) {
+                      var cDef = _classDefs[oo.__wClass];
+                      if(cDef && cDef.methods[msg]) {
+                          oo[msg].apply(oo, oEvent.data.data);
+                          return;
+                      }
+                  }
                   
                   // trigger message if directed abstract msg to some object
                   if(oo.trigger) {
@@ -376,7 +424,7 @@ try {
 }
 ```
 
-### <a name="Marx__createWorkerClass"></a>Marx::_createWorkerClass(className, classObj, requires)
+### <a name="Marx__createWorkerClass"></a>Marx::_createWorkerClass(className, classObj, requires, localMethods)
 
 
 *The source code for the function*:
@@ -387,7 +435,9 @@ if(!_classDefs) _classDefs = {};
 return new p(
     function(success) {
         var prom, first;
-        _classDefs[className] = classObj;
+        _classDefs[className] = {
+            methods : localMethods
+        };
         var codeStr = me._serializeClass(classObj);
         for(var i=0; i<_maxWorkerCnt; i++) {
             ( function(i) {
@@ -396,7 +446,8 @@ return new p(
                     me._callWorker(_threadPool[i], "/", "createClass",  {
                         className: className,
                         code: codeStr,
-                        requires : requires
+                        requires : requires,
+                        localMethods : localMethods
                     }, done );
                 });
             } else {
@@ -405,7 +456,8 @@ return new p(
                         me._callWorker(_threadPool[i], "/", "createClass",  {
                             className: className,
                             code: codeStr,
-                            requires : requires
+                            requires : requires,
+                            localMethods : localMethods
                         }, done );
                     })
                 })
@@ -485,7 +537,8 @@ Creates the class to be used as worker. Functions `on` and `trigger` are reserve
 *The source code for the function*:
 ```javascript
 var oProto = {},
-    me = this;
+    me = this,
+    localMethods = {};
     
 
 // if there are no workers available, emulate calls locally
@@ -516,6 +569,7 @@ if(!this._workersAvailable()) {
     var cDef = classDef.methods;
     for(var n in cDef) {
         if(cDef.hasOwnProperty(n)) {
+            localMethods[n] = n;
             (function(fn) {
                 oProto[n] = function(data, cb) {
                     fn.apply(this, [data, cb]);
@@ -543,7 +597,9 @@ if(!this._workersAvailable()) {
     var cDef = classDef.methods;
     for(var n in cDef) {
         if(cDef.hasOwnProperty(n)) {
+            
             (function(fn,n) {
+                localMethods[n] = n;
                 oProto[n] = function() {
                     var len = arguments.length,
                         args = new Array(len);
@@ -582,7 +638,7 @@ var me = this,
 
 if(this._workersAvailable()) {
     // the create class promise, if workers are available
-    var cProm = this._createWorkerClass( class_id, classDef.webWorkers, classDef.requires );
+    var cProm = this._createWorkerClass( class_id, classDef.webWorkers, classDef.requires, localMethods );
     var c = function(id) {
     
         if(!id) {
