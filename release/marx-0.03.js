@@ -32,7 +32,9 @@
 
         if (useClass) _promiseClass = useClass;
 
-        if (!_promiseClass) _promiseClass = Promise;
+        if (typeof Promise != "undefined") {
+          if (!_promiseClass) _promiseClass = Promise;
+        }
 
         return _promiseClass;
       };
