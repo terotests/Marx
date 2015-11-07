@@ -118,7 +118,7 @@
           };
 
           this.onMsg = function (msg) {
-
+            console.log("Base process msg ", msg);
             if (msg.data.cmd == "call" && msg.data.id == "/") {
               if (msg.data.fn == "createClass") {
 
