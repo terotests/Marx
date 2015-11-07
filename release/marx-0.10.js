@@ -768,6 +768,10 @@
           _objRefs = {};
           _processPool = []; // for node.js child processes
 
+          if (options.isChild) {
+            return;
+          }
+
           // create workers only if not in node.js (assuming browser then)
           if (!this._isNodeJS()) {
             for (var i = 0; i < _maxWorkerCnt; i++) {
