@@ -370,6 +370,8 @@
             if (_worker) return _worker;
           }
 
+          console.log("fork file " + forkFile);
+
           var cp = require("child_process");
           var ww = cp.fork(forkFile);
 
