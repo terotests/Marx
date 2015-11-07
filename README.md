@@ -69,7 +69,7 @@ Listening to the events from web worker
 
 ## node.js
 
-Bootstrap for the base script
+Bootstrap for the base script, in the example "mp.js"
 ```javascript
 var m = require("./marx-0.10.js").Marx({ isChild : true });
 m.__promiseClass( require("bluebird") );
@@ -79,11 +79,46 @@ m._baseProcess();
 Usage:
 
 ```
+var Marx = require("./marx-0.10.js").Marx;
+
 var m = new Marx({
     forkFile : "./mp.js",
     processCnt : 4
 });
-// and then createClass
+
+m.__promiseClass( require("bluebird") );
+
+var myPooler = m.createClass({
+    requires : {
+       js : [
+         {
+             name : "babel-core", assignTo : "babel"
+         }
+       ]
+    },
+    processWorkers : {
+        init : function() {
+           console.log("Process worker init called");
+           this._name = "Babel compiler ";
+
+        },
+        compile : function(theCode) {
+           console.log(theCode);
+           var res = babel.transform(theCode);
+           this.readTheCode( res.code );
+        }
+    },
+    methods : {
+        readTheCode : function(msg) {
+            console.log("The code "+msg);
+        }
+    }
+});
+
+(new myPooler()).then( function(obj) {
+    obj.compile("o => 3");
+});
+
 ```
 
 
