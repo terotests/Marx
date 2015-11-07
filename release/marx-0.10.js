@@ -120,95 +120,99 @@
 
           this.onMsg = function (msg) {
             console.log("Base process msg ", msg);
-            if (msg.data.cmd == "call" && msg.data.id == "/") {
-              if (msg.data.fn == "createClass") {
+            try {
+              if (msg.data.cmd == "call" && msg.data.id == "/") {
+                if (msg.data.fn == "createClass") {
 
-                // creating a new class at the node.js
-                var newClass;
-                var dataObj = msg.data.data; // -- no more JSON parse here
-                eval("newClass = " + dataObj.code);
+                  // creating a new class at the node.js
+                  var newClass;
+                  var dataObj = msg.data.data; // -- no more JSON parse here
+                  eval("newClass = " + dataObj.code);
 
-                if (dataObj.localMethods) {
-                  var methods = dataObj.localMethods;
-                  for (var n in methods) {
-                    if (methods.hasOwnProperty(n)) {
-                      (function (n) {
-                        newClass[n] = function (data) {
+                  if (dataObj.localMethods) {
+                    var methods = dataObj.localMethods;
+                    for (var n in methods) {
+                      if (methods.hasOwnProperty(n)) {
+                        (function (n) {
+                          newClass[n] = function (data) {
 
-                          var len = arguments.length,
-                              args = new Array(len);
-                          for (var i = 0; i < len; i++) args[i] = arguments[i];
-                          postMessage({
-                            msg: n,
-                            data: args,
-                            ref_id: this._ref_id
-                          });
-                        };
-                      })(n);
-                    }
-                  }
-                }
-                this._classes[dataObj.className] = newClass;
-
-                try {
-                  // -- import the scripts
-                  if (dataObj.requires && dataObj.requires.js) {
-                    var list = dataObj.requires.js;
-                    for (var i = 0; i < list.length; i++) {
-                      var mod = list[i];
-                      // TODO: loading external resources might be done differently
-                      if (mod.name && mod.varName) {
-                        if (this._imports[mod.name]) continue;
-                        global[mod.varName] = require(mod.name);
-                        this._imports[mod.name] = true;
+                            var len = arguments.length,
+                                args = new Array(len);
+                            for (var i = 0; i < len; i++) args[i] = arguments[i];
+                            postMessage({
+                              msg: n,
+                              data: args,
+                              ref_id: this._ref_id
+                            });
+                          };
+                        })(n);
                       }
                     }
                   }
-                } catch (e) {}
+                  this._classes[dataObj.className] = newClass;
 
-                postMessage({
-                  cbid: msg.data.cbid,
-                  data: "Done"
-                });
-              }
-              if (msg.data.fn == "createObject" && msg.data.data) {
-                var dataObj = JSON.parse(msg.data.data);
-                var newClass = this._classes[dataObj.className];
-                if (newClass) {
-                  var o_instance = Object.create(newClass);
-                  this._instances[dataObj.id] = o_instance;
+                  try {
+                    // -- import the scripts
+                    if (dataObj.requires && dataObj.requires.js) {
+                      var list = dataObj.requires.js;
+                      for (var i = 0; i < list.length; i++) {
+                        var mod = list[i];
+                        // TODO: loading external resources might be done differently
+                        if (mod.name && mod.varName) {
+                          if (this._imports[mod.name]) continue;
+                          global[mod.varName] = require(mod.name);
+                          this._imports[mod.name] = true;
+                        }
+                      }
+                    }
+                  } catch (e) {}
 
-                  o_instance.sendMsg = function (msg, data, cb) {
-                    postMessage({
-                      msg: msg,
-                      data: data,
-                      ref_id: dataObj.id
-                    });
-                  };
-                  o_instance.trigger = o_instance.send = o_instance.sendMsg;
-                  o_instance._ref_id = dataObj.id;
-                  // call constructor, if any
-                  if (o_instance.init) o_instance.init();
                   postMessage({
                     cbid: msg.data.cbid,
                     data: "Done"
                   });
                 }
-              }
-              return;
-            }
-            if (msg.data.cmd == "call" && msg.data.id) {
-              var ob = this._instances[msg.data.id];
-              if (ob) {
-                if (ob[msg.data.fn]) {
-                  ob[msg.data.fn].apply(ob, [msg.data.data, function (msgData) {
+                if (msg.data.fn == "createObject" && msg.data.data) {
+                  var dataObj = JSON.parse(msg.data.data);
+                  var newClass = this._classes[dataObj.className];
+                  if (newClass) {
+                    var o_instance = Object.create(newClass);
+                    this._instances[dataObj.id] = o_instance;
+
+                    o_instance.sendMsg = function (msg, data, cb) {
+                      postMessage({
+                        msg: msg,
+                        data: data,
+                        ref_id: dataObj.id
+                      });
+                    };
+                    o_instance.trigger = o_instance.send = o_instance.sendMsg;
+                    o_instance._ref_id = dataObj.id;
+                    // call constructor, if any
+                    if (o_instance.init) o_instance.init();
                     postMessage({
                       cbid: msg.data.cbid,
-                      data: msgData
+                      data: "Done"
                     });
-                  }]);
+                  }
                 }
-              } else {}
+                return;
+              }
+              if (msg.data.cmd == "call" && msg.data.id) {
+                var ob = this._instances[msg.data.id];
+                if (ob) {
+                  if (ob[msg.data.fn]) {
+                    ob[msg.data.fn].apply(ob, [msg.data.data, function (msgData) {
+                      postMessage({
+                        cbid: msg.data.cbid,
+                        data: msgData
+                      });
+                    }]);
+                  }
+                } else {}
+              }
+            } catch (e) {
+              console.log("error " + e.message);
             }
           };
         }
