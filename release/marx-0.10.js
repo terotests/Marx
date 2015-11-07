@@ -177,8 +177,7 @@
                   });
                 }
                 if (msg.data.fn == "createObject" && msg.data.data) {
-                  console.log(msg.data.data);
-                  console.log(typeof msg.data.data);
+
                   var dataObj = msg.data.data;
                   var newClass = this._classes[dataObj.className];
                   if (newClass) {
@@ -393,8 +392,6 @@
           if (typeof index == "undefined") {
             if (_worker) return _worker;
           }
-
-          console.log("fork file " + forkFile);
 
           var cp = require("child_process");
           var ww = cp.fork(forkFile);
