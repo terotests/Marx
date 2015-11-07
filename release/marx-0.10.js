@@ -114,6 +114,7 @@
           this._imports = {};
 
           var postMessage = function postMessage(msg) {
+            console.log("sending back " + msg);
             process.send(msg);
           };
 
