@@ -78,7 +78,7 @@ m._baseProcess();
 
 Usage:
 
-```
+```javascript
 var Marx = require("./marx-0.10.js").Marx;
 
 var m = new Marx({
@@ -103,6 +103,7 @@ var myPooler = m.createClass({
 
         },
         compile : function(theCode) {
+           // uses some module to compile code in background
            console.log(theCode);
            var res = babel.transform(theCode);
            this.readTheCode( res.code );
@@ -110,6 +111,7 @@ var myPooler = m.createClass({
     },
     methods : {
         readTheCode : function(msg) {
+            // back in the main process
             console.log("The code "+msg);
         }
     }
