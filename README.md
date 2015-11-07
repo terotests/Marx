@@ -67,6 +67,10 @@ Listening to the events from web worker
     ));
 ```
 
+Codepen:
+http://codepen.io/teroktolonen/pen/ojPGww?editors=001
+
+
 ## node.js
 
 Bootstrap for the base script, in the example "mp.js"
@@ -126,8 +130,7 @@ var myPooler = m.createClass({
 
 
 
-Codepen:
-http://codepen.io/teroktolonen/pen/ojPGww?editors=001
+
 
 
 
