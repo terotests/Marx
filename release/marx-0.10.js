@@ -178,6 +178,8 @@
                   });
                 }
                 if (msg.data.fn == "createObject" && msg.data.data) {
+                  console.log(msg.data.data);
+                  console.log(typeof msg.data.data);
                   var dataObj = JSON.parse(msg.data.data);
                   var newClass = this._classes[dataObj.className];
                   if (newClass) {
