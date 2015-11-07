@@ -124,7 +124,7 @@
 
                 // creating a new class at the node.js
                 var newClass;
-                var dataObj = JSON.parse(msg.data.data);
+                var dataObj = msg.data.data; // -- no more JSON parse here
                 eval("newClass = " + dataObj.code);
 
                 if (dataObj.localMethods) {
@@ -348,14 +348,26 @@
         if (!_worker) return;
 
         _callBackHash[_idx] = callBack;
-        if (typeof dataToSend == "object") dataToSend = JSON.stringify(dataToSend);
-        worker.postMessage({
-          cmd: "call",
-          id: objectID,
-          fn: functionName,
-          cbid: _idx++,
-          data: dataToSend
-        });
+
+        if (this._isNodeJS()) {
+          worker.send({
+            cmd: "call",
+            id: objectID,
+            fn: functionName,
+            cbid: _idx++,
+            data: dataToSend
+          });
+        } else {
+          // might remove this form client side too...
+          if (typeof dataToSend == "object") dataToSend = JSON.stringify(dataToSend);
+          worker.postMessage({
+            cmd: "call",
+            id: objectID,
+            fn: functionName,
+            cbid: _idx++,
+            data: dataToSend
+          });
+        }
       };
 
       /**
