@@ -67,6 +67,27 @@ Listening to the events from web worker
     ));
 ```
 
+## node.js
+
+Bootstrap for the base script
+```javascript
+var m = require("./marx-0.10.js").Marx({ isChild : true });
+m.__promiseClass( require("bluebird") );
+m._baseProcess();
+```
+
+Usage:
+
+```
+var m = new Marx({
+    forkFile : "./mp.js",
+    processCnt : 4
+});
+// and then createClass
+```
+
+
+
 
 Codepen:
 http://codepen.io/teroktolonen/pen/ojPGww?editors=001
@@ -97,12 +118,16 @@ http://codepen.io/teroktolonen/pen/ojPGww?editors=001
 
 - [__promiseClass](README.md#Marx___promiseClass)
 - [_appendToHead](README.md#Marx__appendToHead)
+- [_baseProcess](README.md#Marx__baseProcess)
 - [_baseWorker](README.md#Marx__baseWorker)
 - [_callObject](README.md#Marx__callObject)
 - [_callWorker](README.md#Marx__callWorker)
+- [_createProcess](README.md#Marx__createProcess)
 - [_createWorker](README.md#Marx__createWorker)
 - [_createWorkerClass](README.md#Marx__createWorkerClass)
 - [_createWorkerObj](README.md#Marx__createWorkerObj)
+- [_isNodeJS](README.md#Marx__isNodeJS)
+- [_nodeChildProcess](README.md#Marx__nodeChildProcess)
 - [_serializeClass](README.md#Marx__serializeClass)
 - [_workersAvailable](README.md#Marx__workersAvailable)
 - [createClass](README.md#Marx_createClass)
@@ -148,6 +173,10 @@ The class has following internal singleton variables:
         
 * _loadedLibs
         
+* _isNode
+        
+* _processPool
+        
         
 ### <a name="Marx___promiseClass"></a>Marx::__promiseClass(useClass)
 `useClass` The Promise implementation to use
@@ -159,8 +188,17 @@ The class has following internal singleton variables:
 
 if(useClass) _promiseClass = useClass;
 
-if(typeof(Promise) != "undefined") {
-    if(!_promiseClass) _promiseClass = Promise;
+
+
+if(!_promiseClass) {
+
+    if(typeof(Promise) != "undefined") {
+        _promiseClass = Promise;
+    }    
+    
+    if(this._isNodeJS()) {
+        throw new Error('Promise is not defined');
+    }
 }
 
 return _promiseClass;
@@ -217,6 +255,144 @@ if(p) {
     return _loadedLibs[url];
 }
 
+```
+
+### <a name="Marx__baseProcess"></a>Marx::_baseProcess(t)
+
+
+*The source code for the function*:
+```javascript
+
+// emulate the web worker call
+
+
+
+// just create s normal JS class
+function baseProcess() {
+
+  // constructor phase, classical JS style    
+  this._initDone = true;
+  this._classes = {};
+  this._instances = {};
+  this._imports = {};
+
+  var postMessage = function(msg) {
+      process.send({data : msg});
+  }
+  
+  this.onMsg = function(pData) {
+
+    var msg = { data : pData };
+    try {
+    if (msg.data.cmd == "call" && msg.data.id == "/") {
+      if (msg.data.fn == "createClass") {
+          
+        // creating a new class at the node.js 
+        var newClass;
+        var dataObj =  msg.data.data; // -- no more JSON parse here
+        eval("newClass = " + dataObj.code);
+        
+          if(dataObj.localMethods) {
+              var methods = dataObj.localMethods;
+              for(var n in methods) {
+                  if(methods.hasOwnProperty(n)) {
+                      (function(n) {
+                          newClass[n] = function(data) {
+
+                              var len = arguments.length,
+                                  args = new Array(len);
+                              for(var i=0; i<len; i++) args[i] = arguments[i];
+                              postMessage({
+                                msg : n,
+                                data : args,
+                                ref_id : this._ref_id
+                              });                           
+                          }
+                      })(n);
+                  }
+              }
+          }        
+        this._classes[dataObj.className] = newClass;
+        
+        try {
+            // -- import the scripts
+            if(dataObj.requires && dataObj.requires.js) {
+                var list = dataObj.requires.js;
+                for(var i=0; i<list.length;i++) {
+                    var mod = list[i];
+                    // TODO: loading external resources might be done differently
+                    if(mod.name) {
+                        if(mod.assignTo && mod.varName) {
+                            global[mod.assignTo] = require( mod.name )[mod.varName];
+                        } else {
+                            if(mod.assignTo) {
+                                global[mod.assignTo] = require( mod.name );
+                            }                 
+                        }
+                    }
+                }
+            }
+        } catch(e) {
+            
+        }
+        
+        postMessage({
+          cbid: msg.data.cbid,
+          data : "Done"
+        });        
+      }
+      if (msg.data.fn== "createObject" && msg.data.data ) {
+
+        var dataObj =  msg.data.data ;
+        var newClass = this._classes[dataObj.className];
+        if (newClass) {
+          var o_instance = Object.create(newClass);
+          this._instances[dataObj.id] = o_instance;
+          
+          o_instance.sendMsg = function(msg, data, cb) {
+              postMessage({
+                msg : msg,
+                data : data,
+                ref_id : dataObj.id
+              });             
+          }
+          o_instance.trigger = o_instance.send = o_instance.sendMsg;
+          o_instance._ref_id = dataObj.id;
+          // call constructor, if any
+          if(o_instance.init) o_instance.init();
+          postMessage({
+            cbid: msg.data.cbid,
+            data : "Done"
+          });
+        }
+      }
+      return;
+    }
+    if (msg.data.cmd == "call" && msg.data.id) {
+      var ob = this._instances[msg.data.id];
+      if (ob) {
+        if (ob[msg.data.fn]) {
+          ob[msg.data.fn].apply(ob, [msg.data.data, function(msgData) {
+            postMessage({
+              cbid: msg.data.cbid,
+              data : msgData
+            });
+          }]);
+        }
+      } else {
+         // TODO: error handling postMessage("no instance found");
+      }
+    }
+    } catch(e) {
+        console.log("error "+e.message);
+    }
+  }
+}
+
+var base = new baseProcess();
+process.on('message', function(msg) {
+      base.onMsg(msg);
+  });
 ```
 
 ### <a name="Marx__baseWorker"></a>Marx::_baseWorker(t)
@@ -367,15 +543,96 @@ return this;
 if(!_worker) return;
 
 _callBackHash[_idx] = callBack;
-if(typeof(dataToSend) == "object") dataToSend = JSON.stringify(dataToSend);
-worker.postMessage({
-  cmd: "call",
-  id: objectID,
-  fn: functionName,
-  cbid: _idx++,
-  data: dataToSend
-});
 
+if(this._isNodeJS()) {
+    worker.send({
+      cmd: "call",
+      id: objectID,
+      fn: functionName,
+      cbid: _idx++,
+      data: dataToSend
+    });    
+} else {
+    // might remove this form client side too...
+    if(typeof(dataToSend) == "object") dataToSend = JSON.stringify(dataToSend);
+    worker.postMessage({
+      cmd: "call",
+      id: objectID,
+      fn: functionName,
+      cbid: _idx++,
+      data: dataToSend
+    });
+}
+
+```
+
+### <a name="Marx__createProcess"></a>Marx::_createProcess(index, forkFile)
+`index` The Child process index
+ 
+`forkFile` The name of the file to fork
+ 
+
+
+*The source code for the function*:
+```javascript
+
+try {
+    
+    // currently only one worker in the system...
+    if(typeof(index) == "undefined") {
+        if(_worker) return _worker;
+    }
+    
+    
+    var cp = require('child_process');
+    var ww = cp.fork(forkFile);
+    
+    if(!_callBackHash) {
+        _callBackHash = {};
+        _idx = 1;
+    }
+    _worker = ww;
+    
+    ww.on("message", function(oEvent) {
+        if (typeof(oEvent.data) == "object") {
+          if(oEvent.data.cbid) {
+              var cb = _callBackHash[oEvent.data.cbid];
+              delete _callBackHash[oEvent.data.cbid];
+              cb( oEvent.data.data );
+          }
+          if(oEvent.data.ref_id) {
+              var oo = _objRefs[oEvent.data.ref_id];
+              
+              if(oo) {
+                  var dd = oEvent.data.data,
+                      msg = oEvent.data.msg;
+
+                  if(oo[msg]) {
+                      var cDef = _classDefs[oo.__wClass];
+                      if(cDef && cDef.methods[msg]) {
+                          oo[msg].apply(oo, oEvent.data.data);
+                          return;
+                      }
+                  }
+                  // trigger message if directed abstract msg to some object
+                  if(oo.trigger) {
+                      // call event handler with .on(oEvent.data.msg, ...)
+                      oo.trigger(oEvent.data.msg, oEvent.data.data);
+                  } 
+              }
+          }          
+          return;
+        }
+        // unknown message
+        console.error("Unknown message from the worker ", oEvent.data);
+    });    
+    if(typeof(index) != "undefined") {
+        _threadPool[index] = ww;
+    }    
+    return ww;
+} catch(e) {
+    return null;
+}
 ```
 
 ### <a name="Marx__createWorker"></a>Marx::_createWorker(index)
@@ -388,7 +645,6 @@ worker.postMessage({
 try {
     
     // currently only one worker in the system...
-    
     if(typeof(index) == "undefined") {
         if(_worker) return _worker;
     }
@@ -425,7 +681,6 @@ try {
                           return;
                       }
                   }
-                  
                   // trigger message if directed abstract msg to some object
                   if(oo.trigger) {
                       // call event handler with .on(oEvent.data.msg, ...)
@@ -526,6 +781,25 @@ return new p(
 
 ```
 
+### <a name="Marx__isNodeJS"></a>Marx::_isNodeJS(t)
+
+
+*The source code for the function*:
+```javascript
+if(typeof(_isNode)=="undefined") {
+    _isNode =  (new Function("try { return this == global; } catch(e) { return false; }"))();
+}
+return _isNode;
+```
+
+### <a name="Marx__nodeChildProcess"></a>Marx::_nodeChildProcess(t)
+
+The code which is run under the node.js child process. This code is listening messages from the master process, creates the classes and objects.
+*The source code for the function*:
+```javascript
+
+```
+
 ### <a name="Marx__serializeClass"></a>Marx::_serializeClass(o)
 `o` The Object with functions as properties
  
@@ -609,7 +883,7 @@ if(!this._workersAvailable()) {
 } else {   
 
     // just accept the workers only...
-    var workers = classDef.webWorkers;
+    var workers = classDef.webWorkers || classDef.processWorkers;
     for(var n in workers) {
         if(workers.hasOwnProperty(n)) {
             (function(n) {
@@ -665,7 +939,7 @@ var me = this,
 
 if(this._workersAvailable()) {
     // the create class promise, if workers are available
-    var cProm = this._createWorkerClass( class_id, classDef.webWorkers, classDef.requires, localMethods );
+    var cProm = this._createWorkerClass( class_id, classDef.webWorkers || classDef.processWorkers, classDef.requires, localMethods );
     var c = function(id) {
     
         if(!id) {
@@ -723,20 +997,45 @@ return c;
 
 ```
 
-### Marx::constructor( t )
+### Marx::constructor( options )
+Options for the marx: 
 
+```javascript
+{
+   processCnt : 4,
+   forkFile : &quot;&quot;   // the file to use when forking the child process under node.js
+}
+
+```
 ```javascript
 
 if(!_initDone) {
+    
+    if(!options) options = {};
+    
     _initDone = true;
-    _maxWorkerCnt = 4;
+    _maxWorkerCnt = options.processCnt || 4;
     _roundRobin = 0;
     _threadPool = [];
     _objRefs = {};
-    for(var i=0; i<_maxWorkerCnt;i++) {
-        this._createWorker(i);
+    _processPool = [];// for node.js child processes
+    
+    if(options.isChild) {
+        return;
     }
     
+    // create workers only if not in node.js (assuming browser then)
+    if(!this._isNodeJS()) {
+        for(var i=0; i<_maxWorkerCnt;i++) {
+            this._createWorker(i);
+        }
+    } else {
+
+        for(var i=0; i<_maxWorkerCnt;i++) {
+            this._createProcess(i, options.forkFile);
+        }        
+    }
+
 }
 
 ```
