@@ -115,11 +115,13 @@
 
           var postMessage = function postMessage(msg) {
             console.log("sending back " + msg);
-            process.send(msg);
+            process.send({
+              data: msg
+            });
           };
 
           this.onMsg = function (pData) {
-            console.log("Base process msg ", msg);
+            console.log("Base process msg ", pData);
             var msg = {
               data: pData
             };
