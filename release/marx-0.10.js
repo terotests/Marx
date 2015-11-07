@@ -162,10 +162,14 @@
                       for (var i = 0; i < list.length; i++) {
                         var mod = list[i];
                         // TODO: loading external resources might be done differently
-                        if (mod.name && mod.varName) {
-                          if (this._imports[mod.name]) continue;
-                          global[mod.varName] = require(mod.name);
-                          this._imports[mod.name] = true;
+                        if (mod.name) {
+                          if (mod.assignTo && mod.varName) {
+                            global[mod.assignTo] = require(mod.name)[mod.varName];
+                          } else {
+                            if (mod.assignTo) {
+                              global[mod.assignTo] = require(mod.name);
+                            }
+                          }
                         }
                       }
                     }
