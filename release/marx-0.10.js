@@ -103,11 +103,8 @@
       _myTrait_._baseProcess = function (t) {
 
         // emulate the web worker call
-        var postMessage = function postMessage(msg) {
-          process.send(msg);
-        };
-        // just create s normal JS class
 
+        // just create s normal JS class
         function baseProcess() {
 
           // constructor phase, classical JS style   
@@ -115,6 +112,10 @@
           this._classes = {};
           this._instances = {};
           this._imports = {};
+
+          var postMessage = function postMessage(msg) {
+            process.send(msg);
+          };
 
           this.onMsg = function (msg) {
 
