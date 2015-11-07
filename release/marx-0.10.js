@@ -118,8 +118,11 @@
             process.send(msg);
           };
 
-          this.onMsg = function (msg) {
+          this.onMsg = function (pData) {
             console.log("Base process msg ", msg);
+            var msg = {
+              data: pData
+            };
             try {
               if (msg.data.cmd == "call" && msg.data.id == "/") {
                 if (msg.data.fn == "createClass") {
