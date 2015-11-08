@@ -114,9 +114,7 @@
           this._imports = {};
 
           var postMessage = function postMessage(msg) {
-            process.send({
-              data: msg
-            });
+            process.send(msg);
           };
 
           this.onMsg = function (pData) {
@@ -407,37 +405,39 @@
           _worker = ww;
 
           ww.on("message", function (oEvent) {
-            if (typeof oEvent.data == "object") {
-              if (oEvent.data.cbid) {
-                var cb = _callBackHash[oEvent.data.cbid];
-                delete _callBackHash[oEvent.data.cbid];
-                cb(oEvent.data.data);
+            if (typeof oEvent == "object") {
+              if (oEvent.cbid) {
+                var cb = _callBackHash[oEvent.cbid];
+                if (cb) {
+                  delete _callBackHash[oEvent.cbid];
+                  cb(oEvent.data);
+                }
               }
-              if (oEvent.data.ref_id) {
-                var oo = _objRefs[oEvent.data.ref_id];
+              if (oEvent.ref_id) {
+                var oo = _objRefs[oEvent.ref_id];
 
                 if (oo) {
-                  var dd = oEvent.data.data,
-                      msg = oEvent.data.msg;
+                  var dd = oEvent.data,
+                      msg = oEvent.msg;
 
                   if (oo[msg]) {
                     var cDef = _classDefs[oo.__wClass];
                     if (cDef && cDef.methods[msg]) {
-                      oo[msg].apply(oo, oEvent.data.data);
+                      oo[msg].apply(oo, oEvent.data);
                       return;
                     }
                   }
                   // trigger message if directed abstract msg to some object
                   if (oo.trigger) {
                     // call event handler with .on(oEvent.data.msg, ...)
-                    oo.trigger(oEvent.data.msg, oEvent.data.data);
+                    oo.trigger(oEvent.msg, oEvent.data);
                   }
                 }
               }
               return;
             }
             // unknown message
-            console.error("Unknown message from the worker ", oEvent.data);
+            console.error("Unknown message from the worker ", oEvent);
           });
           if (typeof index != "undefined") {
             _threadPool[index] = ww;
