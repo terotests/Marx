@@ -692,12 +692,7 @@
 
               (function (fn, n) {
                 localMethods[n] = n;
-                oProto[n] = function () {
-                  var len = arguments.length,
-                      args = new Array(len);
-                  for (var i = 0; i < len; i++) args[i] = arguments[i];
-                  fn.apply(this, args);
-                };
+                oProto[n] = fn;
               })(cDef[n], n);
             }
           }
