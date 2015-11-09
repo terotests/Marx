@@ -193,7 +193,7 @@
                         ref_id: dataObj.id
                       });
                     };
-                    o_instance.trigger = o_instance.send = o_instance.sendMsg;
+                    o_instance.send = o_instance.sendMsg;
                     o_instance._ref_id = dataObj.id;
                     // call constructor, if any
                     if (o_instance.init) o_instance.init();
@@ -306,7 +306,7 @@
                       ref_id: dataObj.id
                     });
                   };
-                  o_instance.trigger = o_instance.send = o_instance.sendMsg;
+                  o_instance.send = o_instance.sendMsg;
                   o_instance._ref_id = dataObj.id;
                   // call constructor, if any
                   if (o_instance.init) o_instance.init();
@@ -713,6 +713,8 @@
             fn.apply(me, [data]);
           });
         };
+
+        localMethods["trigger"] = "trigger";
 
         // create a worker object class
         var class_id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
