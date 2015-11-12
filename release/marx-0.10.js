@@ -249,7 +249,7 @@
             if (msg.data.cmd == "call" && msg.data.id == "/") {
               if (msg.data.fn == "createClass") {
                 var newClass;
-                var dataObj = JSON.parse(msg.data.data);
+                var dataObj = msg.data.data;
                 eval("newClass = " + dataObj.code);
 
                 if (dataObj.localMethods) {
@@ -293,7 +293,7 @@
                 });
               }
               if (msg.data.fn == "createObject" && msg.data.data) {
-                var dataObj = JSON.parse(msg.data.data);
+                var dataObj = msg.data.data;
                 var newClass = this._classes[dataObj.className];
                 if (newClass) {
                   var o_instance = Object.create(newClass);
