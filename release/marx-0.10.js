@@ -371,7 +371,7 @@
           });
         } else {
           // might remove this form client side too...
-          if (typeof dataToSend == "object") dataToSend = JSON.stringify(dataToSend);
+          // if(typeof(dataToSend) == "object") dataToSend = JSON.stringify(dataToSend);
           worker.postMessage({
             cmd: "call",
             id: objectID,
@@ -482,7 +482,7 @@
                 if (oo) {
                   var dd = oEvent.data.data,
                       msg = oEvent.data.msg;
-                  console.log(oEvent.data);
+                  // console.log(oEvent.data);
                   if (oo[msg]) {
                     var cDef = _classDefs[oo.__wClass];
                     if (cDef && cDef.methods[msg]) {
