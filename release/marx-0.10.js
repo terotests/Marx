@@ -112,6 +112,8 @@
           this._classes = {};
           this._instances = {};
           this._imports = {};
+          this._messageCnt = 0;
+          this._execptionCnt = 0;
 
           var postMessage = function postMessage(msg) {
             process.send(msg);
@@ -123,6 +125,7 @@
               data: pData
             };
             try {
+              this._messageCnt++;
               if (msg.data.cmd == "call" && msg.data.id == "/") {
 
                 // TODO: finalize this
@@ -138,6 +141,20 @@
                       fromTotalGb: parseFloat(100 * o.heapTotal / (1024 * 1024 * 1024)).toFixed(2)
                     };
                   }
+                  postMessage({
+                    cbid: msg.data.cbid,
+                    data: usage
+                  });
+                }
+                if (msg.data.fn == "classMetrics") {
+                  var usage = {};
+
+                  usage.requireCnt = Object.keys(this._imports).length;
+                  usage.instanceCnt = Object.keys(this._instances).length;
+                  usage.classCnt = Object.keys(this._classes).length;
+                  usage.messageCnt = this._messageCnt;
+                  usage.errors = this._execptionCnt;
+
                   postMessage({
                     cbid: msg.data.cbid,
                     data: usage
@@ -190,7 +207,9 @@
                         }
                       }
                     }
-                  } catch (e) {}
+                  } catch (e) {
+                    this._execptionCnt++;
+                  }
 
                   postMessage({
                     cbid: msg.data.cbid,
@@ -245,6 +264,7 @@
               }
             } catch (e) {
               console.log("error " + e.message);
+              this._execptionCnt++;
             }
           };
         }
@@ -413,9 +433,10 @@
       };
 
       /**
+       * @param String name  - Metrics to collect, &quot;heapUsage&quot;
        * @param Function callBack  - Callback after data has been collected
        */
-      _myTrait_._collectMemoryUsage = function (callBack) {
+      _myTrait_._collectMemoryUsage = function (name, callBack) {
 
         var tot_cnt = 0;
         for (var i in _threadPool) tot_cnt++;
@@ -424,7 +445,7 @@
             me = this;
         for (var i in _threadPool) {
           (function (i) {
-            me._callWorker(_threadPool[i], "/", "heapUsage", {}, function (res) {
+            me._callWorker(_threadPool[i], "/", name, {}, function (res) {
               res.name = "Worker Process " + i;
               tot_cnt--;
               results.push(res);
