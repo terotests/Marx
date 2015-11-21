@@ -124,6 +124,25 @@
             };
             try {
               if (msg.data.cmd == "call" && msg.data.id == "/") {
+
+                // TODO: finalize this
+                if (msg.data.fn == "heapUsage") {
+                  var usage = {};
+                  if (process && process.memoryUsage) {
+                    var o = process.memoryUsage();
+                    usage = {
+                      rss: o.rss,
+                      heapTotal: o.heapTotal,
+                      heapUsed: o.heapUsed,
+                      heapUsage: parseInt(100 * o.heapUsed / o.heapTotal),
+                      fromTotalGb: parseFloat(100 * o.heapTotal / (1024 * 1024 * 1024)).toFixed(2)
+                    };
+                  }
+                  postMessage({
+                    cbid: msg.data.cbid,
+                    data: usage
+                  });
+                }
                 if (msg.data.fn == "createClass") {
 
                   // creating a new class at the node.js
@@ -391,6 +410,30 @@
             data: dataToSend
           });
         }
+      };
+
+      /**
+       * @param Function callBack  - Callback after data has been collected
+       */
+      _myTrait_._collectMemoryUsage = function (callBack) {
+
+        var tot_cnt = 0;
+        for (var i in _threadPool) tot_cnt++;
+
+        var results = [],
+            me = this;
+        for (var i in _threadPool) {
+          (function (i) {
+            me._callWorker(_threadPool[i], "/", "heapUsage", {}, function (res) {
+              res.name = "Worker Process " + i;
+              tot_cnt--;
+              results.push(res);
+
+              if (tot_cnt == 0) callBack(results);
+            });
+          })(i);
+        }
+        return this;
       };
 
       /**
