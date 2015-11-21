@@ -146,6 +146,12 @@
                     data: usage
                   });
                 }
+                if (msg.data.fn == "listClasses") {
+                  postMessage({
+                    cbid: msg.data.cbid,
+                    data: Object.keys(this._classes)
+                  });
+                }
                 if (msg.data.fn == "classMetrics") {
                   var usage = {};
 
@@ -443,6 +449,10 @@
 
         var results = [],
             me = this;
+
+        // TODO: implement this for proprieatry browser interfaces if available
+        // window.performance.memory
+
         for (var i in _threadPool) {
           (function (i) {
             me._callWorker(_threadPool[i], "/", name, {}, function (res) {
