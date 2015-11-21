@@ -208,6 +208,12 @@
               if (msg.data.cmd == "call" && msg.data.id) {
                 var ob = this._instances[msg.data.id];
                 if (ob) {
+                  if (msg.data.fn == "terminate") {
+                    console.log("=== Marx TERMINATE Called ===");
+                    if (ob["terminate"]) ob["terminate"]();
+                    delete this._instances[msg.data.id];
+                    return;
+                  }
                   if (ob[msg.data.fn]) {
                     ob[msg.data.fn].apply(ob, [msg.data.data, function (msgData) {
                       postMessage({
