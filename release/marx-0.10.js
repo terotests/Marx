@@ -684,6 +684,14 @@
       };
 
       /**
+       * @param String name  - Metrics to collect
+       * @param Function callBackFn  - Function to call when done
+       */
+      _myTrait_._metrics = function (name, callBackFn) {
+        return this._collectMemoryUsage(name, callBackFn);
+      };
+
+      /**
        * The code which is run under the node.js child process. This code is listening messages from the master process, creates the classes and objects.
        * @param float t
        */
