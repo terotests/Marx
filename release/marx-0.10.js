@@ -147,9 +147,12 @@
                   });
                 }
                 if (msg.data.fn == "listClasses") {
+
                   postMessage({
                     cbid: msg.data.cbid,
-                    data: Object.keys(this._classes)
+                    data: {
+                      list: Object.keys(this._classes)
+                    }
                   });
                 }
                 if (msg.data.fn == "classMetrics") {
