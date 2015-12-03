@@ -127,6 +127,36 @@ var myPooler = m.createClass({
 
 ```
 
+## Extending the class
+
+Function `marxClass.extendClass` returns a promise which resolves when the class has been update. NOTE: existing objects are not effected.
+
+```javascript
+marxClass.extendClass({
+    requires : {
+      js : [
+        { url : "https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.js"}
+      ]
+    },  
+    webWorkers : {
+      get_ast : function() {
+          if(this._ast) {
+              this.trigger("ast", this._ast);
+              this.trigger("lod", _.indexOf([1, 2, 1, 2], 2));
+          }
+      }
+    },
+    methods : {
+      ok : function() {
+        alert("Extend ok")
+      }
+    }
+}).then(
+  function() {
+  // ...
+  });
+  
+```
 
 
 
@@ -162,11 +192,13 @@ var myPooler = m.createClass({
 - [_baseWorker](README.md#Marx__baseWorker)
 - [_callObject](README.md#Marx__callObject)
 - [_callWorker](README.md#Marx__callWorker)
+- [_collectMemoryUsage](README.md#Marx__collectMemoryUsage)
 - [_createProcess](README.md#Marx__createProcess)
 - [_createWorker](README.md#Marx__createWorker)
 - [_createWorkerClass](README.md#Marx__createWorkerClass)
 - [_createWorkerObj](README.md#Marx__createWorkerObj)
 - [_isNodeJS](README.md#Marx__isNodeJS)
+- [_metrics](README.md#Marx__metrics)
 - [_nodeChildProcess](README.md#Marx__nodeChildProcess)
 - [_serializeClass](README.md#Marx__serializeClass)
 - [_workersAvailable](README.md#Marx__workersAvailable)
@@ -227,8 +259,6 @@ The class has following internal singleton variables:
 ```javascript
 
 if(useClass) _promiseClass = useClass;
-
-
 
 if(!_promiseClass) {
 
@@ -315,16 +345,61 @@ function baseProcess() {
   this._classes = {};
   this._instances = {};
   this._imports = {};
+  this._messageCnt =0;
+  this._execptionCnt=0;
 
   var postMessage = function(msg) {
-      process.send({data : msg});
+      process.send(msg);
   }
   
   this.onMsg = function(pData) {
 
     var msg = { data : pData };
     try {
+        this._messageCnt++;
     if (msg.data.cmd == "call" && msg.data.id == "/") {
+      
+      // TODO: finalize this
+      if( msg.data.fn == "heapUsage") {
+        var usage = {};
+        if(process && process.memoryUsage) {
+            var o = process.memoryUsage();
+            usage = {
+                rss : o.rss,
+                heapTotal : o.heapTotal,
+                heapUsed : o.heapUsed,
+                heapUsage : parseInt( 100* o.heapUsed / o.heapTotal),
+                fromTotalGb : parseFloat( 100* o.heapTotal / (1024*1024*1024) ).toFixed(2)
+            };
+        }
+        postMessage({
+          cbid: msg.data.cbid,
+          data : usage
+        });         
+      }   
+      if( msg.data.fn == "listClasses") {
+
+        postMessage({
+          cbid: msg.data.cbid,
+          data : {
+              list : Object.keys(this._classes)
+          }
+        });         
+      }       
+      if( msg.data.fn == "classMetrics") {
+        var usage = {};
+        
+        usage.requireCnt    = Object.keys(this._imports).length;
+        usage.instanceCnt = Object.keys(this._instances).length;
+        usage.classCnt    = Object.keys(this._classes).length;
+        usage.messageCnt = this._messageCnt;
+        usage.errors = this._execptionCnt;
+        
+        postMessage({
+          cbid: msg.data.cbid,
+          data : usage
+        });         
+      }        
       if (msg.data.fn == "createClass") {
           
         // creating a new class at the node.js 
@@ -373,7 +448,7 @@ function baseProcess() {
                 }
             }
         } catch(e) {
-            
+            this._execptionCnt++;
         }
         
         postMessage({
@@ -396,7 +471,7 @@ function baseProcess() {
                 ref_id : dataObj.id
               });             
           }
-          o_instance.trigger = o_instance.send = o_instance.sendMsg;
+          o_instance.send = o_instance.sendMsg;
           o_instance._ref_id = dataObj.id;
           // call constructor, if any
           if(o_instance.init) o_instance.init();
@@ -411,6 +486,12 @@ function baseProcess() {
     if (msg.data.cmd == "call" && msg.data.id) {
       var ob = this._instances[msg.data.id];
       if (ob) {
+        if(msg.data.fn == "terminate") {
+            console.log("=== Marx TERMINATE Called ===");
+            if( ob["terminate"] ) ob["terminate"]();
+            delete this._instances[msg.data.id]; 
+            return;
+        }           
         if (ob[msg.data.fn]) {
           ob[msg.data.fn].apply(ob, [msg.data.data, function(msgData) {
             postMessage({
@@ -425,6 +506,7 @@ function baseProcess() {
     }
     } catch(e) {
         console.log("error "+e.message);
+        this._execptionCnt++;
     }
   }
 }
@@ -451,10 +533,63 @@ return {
   start: function(msg) {
     this.init();
     // Root object call
+
     if (msg.data.cmd == "call" && msg.data.id == "/") {
+      if (msg.data.fn == "extendClass") {
+        var newClass;
+        var dataObj = msg.data.data;
+        eval("newClass = " + dataObj.code);
+        
+          if(dataObj.localMethods) {
+              var methods = dataObj.localMethods;
+              for(var n in methods) {
+                  if(methods.hasOwnProperty(n)) {
+                      (function(n) {
+                          newClass[n] = function(data) {
+
+                              var len = arguments.length,
+                                  args = new Array(len);
+                              for(var i=0; i<len; i++) args[i] = arguments[i];
+                              postMessage({
+                                msg : n,
+                                data : args,
+                                ref_id : this._ref_id
+                              });                           
+                          }
+                      })(n);
+                  }
+              }
+          }        
+        for(var nnn in newClass) {
+            if(newClass.hasOwnProperty(nnn)) {
+                this._classes[dataObj.className][nnn] = newClass[nnn];
+            }
+        }
+
+        try {
+            // -- import the scripts
+            if(dataObj.requires && dataObj.requires.js) {
+                var list = dataObj.requires.js;
+                for(var i=0; i<list.length;i++) {
+                    var url = list[i].url;
+                    if(this._imports[url]) continue;
+                    importScripts(url);
+                    this._imports[url] = true;
+                }
+            }
+        } catch(e) {
+            
+        }
+        
+        postMessage({
+          cbid: msg.data.cbid,
+          data : "Done"
+        });        
+      }    
+
       if (msg.data.fn == "createClass") {
         var newClass;
-        var dataObj = JSON.parse( msg.data.data );
+        var dataObj = msg.data.data;
         eval("newClass = " + dataObj.code);
         
           if(dataObj.localMethods) {
@@ -500,7 +635,7 @@ return {
         });        
       }
       if (msg.data.fn== "createObject" && msg.data.data ) {
-        var dataObj = JSON.parse( msg.data.data );
+        var dataObj = msg.data.data;
         var newClass = this._classes[dataObj.className];
         if (newClass) {
           var o_instance = Object.create(newClass);
@@ -513,7 +648,7 @@ return {
                 ref_id : dataObj.id
               });             
           }
-          o_instance.trigger = o_instance.send = o_instance.sendMsg;
+          o_instance.send = o_instance.sendMsg;
           o_instance._ref_id = dataObj.id;
           // call constructor, if any
           if(o_instance.init) o_instance.init();
@@ -528,6 +663,11 @@ return {
     if (msg.data.cmd == "call" && msg.data.id) {
       var ob = this._instances[msg.data.id];
       if (ob) {
+        if(msg.data.fn == "terminate") {
+            if( ob["terminate"] ) ob["terminate"]();
+            delete this._instances[msg.data.id]; 
+            return;
+        }  
         if (ob[msg.data.fn]) {
           ob[msg.data.fn].apply(ob, [msg.data.data, function(msgData) {
             postMessage({
@@ -594,7 +734,7 @@ if(this._isNodeJS()) {
     });    
 } else {
     // might remove this form client side too...
-    if(typeof(dataToSend) == "object") dataToSend = JSON.stringify(dataToSend);
+    // if(typeof(dataToSend) == "object") dataToSend = JSON.stringify(dataToSend);
     worker.postMessage({
       cmd: "call",
       id: objectID,
@@ -604,6 +744,39 @@ if(this._isNodeJS()) {
     });
 }
 
+```
+
+### <a name="Marx__collectMemoryUsage"></a>Marx::_collectMemoryUsage(name, callBack)
+`name` Metrics to collect, &quot;heapUsage&quot;
+ 
+`callBack` Callback after data has been collected
+ 
+
+
+*The source code for the function*:
+```javascript
+
+var tot_cnt=0;
+for(var i in _threadPool) tot_cnt++;
+
+var results = [],
+    me = this;
+    
+// TODO: implement this for proprieatry browser interfaces if available
+// window.performance.memory
+
+for(var i in _threadPool) {
+    (function(i) {
+        me._callWorker(_threadPool[i], "/", name, {}, function(res) {
+            res.name = "Worker Process "+i;
+            tot_cnt--;
+            results.push(res);
+            
+            if(tot_cnt==0) callBack( results );
+        });
+    })(i);
+}
+return this;
 ```
 
 ### <a name="Marx__createProcess"></a>Marx::_createProcess(index, forkFile)
@@ -634,37 +807,39 @@ try {
     _worker = ww;
     
     ww.on("message", function(oEvent) {
-        if (typeof(oEvent.data) == "object") {
-          if(oEvent.data.cbid) {
-              var cb = _callBackHash[oEvent.data.cbid];
-              delete _callBackHash[oEvent.data.cbid];
-              cb( oEvent.data.data );
+        if (typeof(oEvent) == "object") {
+          if(oEvent.cbid) {
+              var cb = _callBackHash[oEvent.cbid];
+              if(cb) {
+                  delete _callBackHash[oEvent.cbid];
+                  cb( oEvent.data );
+              }
           }
-          if(oEvent.data.ref_id) {
-              var oo = _objRefs[oEvent.data.ref_id];
+          if(oEvent.ref_id) {
+              var oo = _objRefs[oEvent.ref_id];
               
               if(oo) {
-                  var dd = oEvent.data.data,
-                      msg = oEvent.data.msg;
+                  var dd = oEvent.data,
+                      msg = oEvent.msg;
 
                   if(oo[msg]) {
                       var cDef = _classDefs[oo.__wClass];
                       if(cDef && cDef.methods[msg]) {
-                          oo[msg].apply(oo, oEvent.data.data);
+                          oo[msg].apply(oo, oEvent.data);
                           return;
                       }
                   }
                   // trigger message if directed abstract msg to some object
                   if(oo.trigger) {
                       // call event handler with .on(oEvent.data.msg, ...)
-                      oo.trigger(oEvent.data.msg, oEvent.data.data);
+                      oo.trigger(oEvent.msg, oEvent.data);
                   } 
               }
           }          
           return;
         }
         // unknown message
-        console.error("Unknown message from the worker ", oEvent.data);
+        console.error("Unknown message from the worker ", oEvent);
     });    
     if(typeof(index) != "undefined") {
         _threadPool[index] = ww;
@@ -709,11 +884,9 @@ try {
           }
           if(oEvent.data.ref_id) {
               var oo = _objRefs[oEvent.data.ref_id];
-              
               if(oo) {
                   var dd = oEvent.data.data,
                       msg = oEvent.data.msg;
-                  console.log(oEvent.data);
                   if(oo[msg]) {
                       var cDef = _classDefs[oo.__wClass];
                       if(cDef && cDef.methods[msg]) {
@@ -742,7 +915,7 @@ try {
 }
 ```
 
-### <a name="Marx__createWorkerClass"></a>Marx::_createWorkerClass(className, classObj, requires, localMethods)
+### <a name="Marx__createWorkerClass"></a>Marx::_createWorkerClass(className, classObj, requires, localMethods, bExtend)
 
 
 *The source code for the function*:
@@ -750,18 +923,32 @@ try {
 var p = this.__promiseClass(), me = this;
 
 if(!_classDefs) _classDefs = {};
+
+var remote_fn = "createClass";
+if(bExtend) {
+    remote_fn = "extendClass";
+}
+
 return new p(
     function(success) {
         var prom, first;
-        _classDefs[className] = {
-            methods : localMethods
-        };
+        if(bExtend) {
+            for(var lName in localMethods) {
+                if(localMethods.hasOwnProperty(lName)) {
+                    _classDefs[className].methods[lName] = localMethods[lName];
+                }
+            }
+        } else {
+            _classDefs[className] = {
+                methods : localMethods
+            };
+        }
         var codeStr = me._serializeClass(classObj);
         for(var i=0; i<_maxWorkerCnt; i++) {
             ( function(i) {
             if(!prom) {
                 first = prom = new p(function(done) {
-                    me._callWorker(_threadPool[i], "/", "createClass",  {
+                    me._callWorker(_threadPool[i], "/", remote_fn,  {
                         className: className,
                         code: codeStr,
                         requires : requires,
@@ -771,7 +958,7 @@ return new p(
             } else {
                 prom = prom.then( function() {
                     return new p(function(done) {
-                        me._callWorker(_threadPool[i], "/", "createClass",  {
+                        me._callWorker(_threadPool[i], "/", remote_fn,  {
                             className: className,
                             code: codeStr,
                             requires : requires,
@@ -810,11 +997,13 @@ return new p(
         refObj.__wPool = pool_index;
         refObj.__wClass = className;
         
+        _objRefs[id] = refObj;
+        
         me._callWorker(_threadPool[pool_index], "/", "createObject",  {
             className: className,
             id: id
         }, function( result ) {
-            _objRefs[id] = refObj;
+            
             success( result ); 
         });
 });
@@ -830,6 +1019,18 @@ if(typeof(_isNode)=="undefined") {
     _isNode =  (new Function("try { return this == global; } catch(e) { return false; }"))();
 }
 return _isNode;
+```
+
+### <a name="Marx__metrics"></a>Marx::_metrics(name, callBackFn)
+`name` Metrics to collect
+ 
+`callBackFn` Function to call when done
+ 
+
+
+*The source code for the function*:
+```javascript
+return this._collectMemoryUsage(name, callBackFn);
 ```
 
 ### <a name="Marx__nodeChildProcess"></a>Marx::_nodeChildProcess(t)
@@ -911,7 +1112,7 @@ if(!this._workersAvailable()) {
     for(var n in cDef) {
         if(cDef.hasOwnProperty(n)) {
             localMethods[n] = n;
-            (function(fn) {
+            (function(fn, n) {
                 oProto[n] = function(data, cb) {
                     fn.apply(this, [data, cb]);
                 }
@@ -941,12 +1142,7 @@ if(!this._workersAvailable()) {
             
             (function(fn,n) {
                 localMethods[n] = n;
-                oProto[n] = function() {
-                    var len = arguments.length,
-                        args = new Array(len);
-                    for(var i=0; i<len; i++) args[i] = arguments[i];
-                    fn.apply(this, args);
-                }
+                oProto[n] = fn;
             })(cDef[n],n);
         }
     }    
@@ -971,8 +1167,13 @@ oProto.trigger = function(msg, data) {
 // create a worker object class
 var class_id =  Math.random().toString(36).substring(2, 15) +
                 Math.random().toString(36).substring(2, 15);  
-                
 
+
+
+localMethods["trigger"] = "trigger";
+
+
+            
 
 var me = this,
     p = this.__promiseClass();
@@ -1031,6 +1232,40 @@ if(this._workersAvailable()) {
     };
     c.prototype = oProto;    
 }
+
+// Static method to extend the class befor the show begins
+// NOTE: currently available only for web workers...
+c.extendClass = function(classDef) {
+
+    var workers = classDef.webWorkers || classDef.processWorkers;
+    for(var n in workers) {
+        if(workers.hasOwnProperty(n)) {
+            (function(n) {
+                oProto[n] = function(data, cb) {
+                    if(!data) data = null;
+                    me._callObject( this._id, n, data, cb );
+                }
+            })(n);
+        }
+    }
+    
+    var cDef = classDef.methods;
+    for(var n in cDef) {
+        if(cDef.hasOwnProperty(n)) {
+            
+            (function(fn,n) {
+                localMethods[n] = n;
+                oProto[n] = fn;
+            })(cDef[n],n);
+            
+        }
+    } 
+    return me._createWorkerClass( class_id, 
+                                    classDef.webWorkers || classDef.processWorkers, 
+                                    classDef.requires, 
+                                    localMethods, true );
+}
+
 
 return c;
 
