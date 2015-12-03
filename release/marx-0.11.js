@@ -560,6 +560,7 @@
           ww.onmessage = function (oEvent) {
             console.log("Got message ", oEvent);
             if (typeof oEvent.data == "object") {
+              console.log("is object");
               if (oEvent.data.cbid) {
                 var cb = _callBackHash[oEvent.data.cbid];
                 delete _callBackHash[oEvent.data.cbid];
@@ -567,12 +568,13 @@
               }
               if (oEvent.data.ref_id) {
                 var oo = _objRefs[oEvent.data.ref_id];
-
+                console.log("reference to ", oo);
                 if (oo) {
                   var dd = oEvent.data.data,
                       msg = oEvent.data.msg;
                   // console.log(oEvent.data);
                   if (oo[msg]) {
+                    console.log("had method ", msg);
                     var cDef = _classDefs[oo.__wClass];
                     if (cDef && cDef.methods[msg]) {
                       oo[msg].apply(oo, oEvent.data.data);
@@ -761,7 +763,7 @@
           for (var n in cDef) {
             if (cDef.hasOwnProperty(n)) {
               localMethods[n] = n;
-              (function (fn) {
+              (function (fn, n) {
                 oProto[n] = function (data, cb) {
                   fn.apply(this, [data, cb]);
                 };
