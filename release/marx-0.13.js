@@ -879,34 +879,6 @@
         // create a worker object class
         var class_id = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        // NOTE: currently available only for web workers...
-        oProto.extendClass = function (classDef) {
-
-          var workers = classDef.webWorkers || classDef.processWorkers;
-          for (var n in workers) {
-            if (workers.hasOwnProperty(n)) {
-              (function (n) {
-                oProto[n] = function (data, cb) {
-                  if (!data) data = null;
-                  me._callObject(this._id, n, data, cb);
-                };
-              })(n);
-            }
-          }
-
-          var cDef = classDef.methods;
-          for (var n in cDef) {
-            if (cDef.hasOwnProperty(n)) {
-
-              (function (fn, n) {
-                localMethods[n] = n;
-                oProto[n] = fn;
-              })(cDef[n], n);
-            }
-          }
-          return this._createWorkerClass(class_id, classDef.webWorkers || classDef.processWorkers, classDef.requires, localMethods, true);
-        };
-
         localMethods["trigger"] = "trigger";
 
         var me = this,
@@ -961,6 +933,35 @@
           };
           c.prototype = oProto;
         }
+
+        // Static method to extend the class befor the show begins
+        // NOTE: currently available only for web workers...
+        c.extendClass = function (classDef) {
+
+          var workers = classDef.webWorkers || classDef.processWorkers;
+          for (var n in workers) {
+            if (workers.hasOwnProperty(n)) {
+              (function (n) {
+                oProto[n] = function (data, cb) {
+                  if (!data) data = null;
+                  me._callObject(this._id, n, data, cb);
+                };
+              })(n);
+            }
+          }
+
+          var cDef = classDef.methods;
+          for (var n in cDef) {
+            if (cDef.hasOwnProperty(n)) {
+
+              (function (fn, n) {
+                localMethods[n] = n;
+                oProto[n] = fn;
+              })(cDef[n], n);
+            }
+          }
+          return me._createWorkerClass(class_id, classDef.webWorkers || classDef.processWorkers, classDef.requires, localMethods, true);
+        };
 
         return c;
       };
